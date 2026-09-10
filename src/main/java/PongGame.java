@@ -12,6 +12,7 @@ public class PongGame extends JPanel implements KeyListener {
 
     public enum State {
         START,
+        SERVING,
         PLAYING,
         PAUSED,
         GAME_OVER
@@ -20,6 +21,8 @@ public class PongGame extends JPanel implements KeyListener {
     public static final int WINDOW_WIDTH = 640;
     public static final int WINDOW_HEIGHT = 480;
     public static final int WINNING_SCORE = 10;
+    private static final int SERVE_COUNTDOWN_TICKS = 60;
+    private static final int TICKS_PER_COUNTDOWN_NUMBER = SERVE_COUNTDOWN_TICKS / 3;
 
     private State gameState = State.START;
     private final Ball ball;
@@ -34,6 +37,7 @@ public class PongGame extends JPanel implements KeyListener {
     private String winnerText = "";
     private int rallyCount = 0;
     private int maxRally = 0;
+    private int serveCountdownTicks = 0;
 
     public PongGame() {
         setPreferredSize(new Dimension(WINDOW_WIDTH, WINDOW_HEIGHT));
@@ -88,6 +92,8 @@ public class PongGame extends JPanel implements KeyListener {
         // Overlays depending on state
         if (gameState == State.START) {
             drawStartOverlay(g2d);
+        } else if (gameState == State.SERVING) {
+            drawServeOverlay(g2d);
         } else if (gameState == State.PAUSED) {
             drawPausedOverlay(g2d);
         } else if (gameState == State.GAME_OVER) {
@@ -136,6 +142,16 @@ public class PongGame extends JPanel implements KeyListener {
         drawCenteredString(g2d, "Press SPACE or ENTER to Serve", WINDOW_HEIGHT / 2 + 80);
     }
 
+    private void drawServeOverlay(Graphics2D g2d) {
+        g2d.setColor(new Color(0, 0, 0, 100));
+        g2d.fillRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+        g2d.setColor(Color.YELLOW);
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 48));
+        int countdownNumber = (int) Math.ceil((double) serveCountdownTicks / TICKS_PER_COUNTDOWN_NUMBER);
+        drawCenteredString(g2d, Integer.toString(Math.max(1, countdownNumber)), WINDOW_HEIGHT / 2 + 15);
+    }
+
     private void drawPausedOverlay(Graphics2D g2d) {
         g2d.setColor(new Color(0, 0, 0, 160));
         g2d.fillRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -176,6 +192,14 @@ public class PongGame extends JPanel implements KeyListener {
     }
 
     public void gameLogic() {
+        if (gameState == State.SERVING) {
+            updateEffects();
+            if (--serveCountdownTicks <= 0) {
+                gameState = State.PLAYING;
+            }
+            return;
+        }
+
         if (gameState != State.PLAYING) {
             return;
         }
@@ -202,7 +226,7 @@ public class PongGame extends JPanel implements KeyListener {
                 winnerText = "COMPUTER";
                 SoundEffect.playGameOver();
             } else {
-                resetBall(1); // Serve towards PC
+                startServe(1); // Serve towards PC
             }
             return;
         } else if (ball.getX() > WINDOW_WIDTH) {
@@ -215,7 +239,7 @@ public class PongGame extends JPanel implements KeyListener {
                 winnerText = "PLAYER";
                 SoundEffect.playVictory();
             } else {
-                resetBall(-1); // Serve towards Player
+                startServe(-1); // Serve towards Player
             }
             return;
         }
@@ -266,10 +290,12 @@ public class PongGame extends JPanel implements KeyListener {
         pcPaddle.moveTowards(targetY, 0, WINDOW_HEIGHT);
     }
 
-    private void resetBall(int serveDirection) {
+    private void startServe(int serveDirection) {
         rallyCount = 0;
         ball.reset(WINDOW_WIDTH, WINDOW_HEIGHT, serveDirection);
         ballTrail.clear();
+        serveCountdownTicks = SERVE_COUNTDOWN_TICKS;
+        gameState = State.SERVING;
     }
 
     private void recordBallTrail() {
@@ -346,8 +372,7 @@ public class PongGame extends JPanel implements KeyListener {
         winnerText = "";
         userPaddle.setY((WINDOW_HEIGHT - userPaddle.getHeight()) / 2);
         pcPaddle.setY((WINDOW_HEIGHT - pcPaddle.getHeight()) / 2);
-        resetBall(Math.random() > 0.5 ? 1 : -1);
-        gameState = State.PLAYING;
+        startServe(1);
     }
 
     @Override
