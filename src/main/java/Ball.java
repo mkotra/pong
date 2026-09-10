@@ -4,6 +4,8 @@ public class Ball {
 
     public static final double INITIAL_SPEED = 5.5;
     public static final double MAX_SPEED = 12.0;
+    private static final double PADDLE_MOTION_INFLUENCE = 0.35;
+    private static final double MAX_BOUNCE_ANGLE = Math.PI / 3.0;
 
     private double x, y;
     private double vx, vy;
@@ -72,14 +74,19 @@ public class Ball {
         normalizedIntersect = Math.max(-1.0, Math.min(1.0, normalizedIntersect));
 
         // Max deflection angle: 60 degrees (PI / 3 radians)
-        double bounceAngle = normalizedIntersect * (Math.PI / 3.0);
+        double bounceAngle = normalizedIntersect * MAX_BOUNCE_ANGLE;
+        double verticalSpeed = speed * Math.sin(bounceAngle);
 
-        if (isUserPaddle) {
-            vx = speed * Math.cos(bounceAngle);
-        } else {
-            vx = -speed * Math.cos(bounceAngle);
-        }
-        vy = speed * Math.sin(bounceAngle);
+        // Moving a paddle adds a small, capped vertical "spin" to the return.
+        // Recalculate vx afterwards so the ball keeps its current total speed.
+        double maxVerticalSpeed = speed * Math.sin(MAX_BOUNCE_ANGLE);
+        vy = Math.clamp(
+                verticalSpeed + paddle.getVerticalVelocity() * PADDLE_MOTION_INFLUENCE,
+                -maxVerticalSpeed,
+                maxVerticalSpeed
+        );
+        double horizontalSpeed = Math.sqrt(speed * speed - vy * vy);
+        vx = isUserPaddle ? horizontalSpeed : -horizontalSpeed;
 
         SoundEffect.playPaddleHit();
     }
