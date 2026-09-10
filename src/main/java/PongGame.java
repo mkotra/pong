@@ -204,6 +204,18 @@ public class PongGame extends JPanel implements KeyListener {
             return;
         }
 
+        // Move paddles before resolving collisions so their current motion can affect a return.
+        boolean movingUp = keysPressed.contains(KeyEvent.VK_W) || keysPressed.contains(KeyEvent.VK_UP);
+        boolean movingDown = keysPressed.contains(KeyEvent.VK_S) || keysPressed.contains(KeyEvent.VK_DOWN);
+        if (movingUp) {
+            userPaddle.moveUp(0);
+        } else if (movingDown) {
+            userPaddle.moveDown(WINDOW_HEIGHT);
+        } else {
+            userPaddle.stopVerticalMovement();
+        }
+        updateAiPaddle();
+
         // User paddle collision (Left side)
         if (ball.getVx() < 0 && userPaddle.isCollidingWithBall(ball)) {
             ball.bouncePaddle(userPaddle, true);
@@ -222,16 +234,6 @@ public class PongGame extends JPanel implements KeyListener {
             }
         }
 
-        // User paddle movement
-        if (keysPressed.contains(KeyEvent.VK_W) || keysPressed.contains(KeyEvent.VK_UP)) {
-            userPaddle.moveUp(0);
-        }
-        if (keysPressed.contains(KeyEvent.VK_S) || keysPressed.contains(KeyEvent.VK_DOWN)) {
-            userPaddle.moveDown(WINDOW_HEIGHT);
-        }
-
-        // PC AI Paddle Movement
-        updateAiPaddle();
     }
 
     private void updateAiPaddle() {
