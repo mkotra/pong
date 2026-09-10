@@ -1,30 +1,24 @@
 import javax.swing.*;
 
-private static final JFrame FRAME = new JFrame("Pong");
-
 void main() {
+    SwingUtilities.invokeLater(() -> {
+        JFrame frame = new JFrame("Pong");
+        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
-    //make it so program exits on close button click
-    FRAME.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        PongGame game = new PongGame();
+        frame.add(game);
+        frame.pack();
+        frame.setResizable(false);
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
 
-    //the size of the game will be 480x640, the size of the JFrame needs to be slightly larger
-    FRAME.setSize(650, 495);
+        game.requestFocusInWindow();
 
-    //make the new PongGame
-    PongGame game = new PongGame();
-
-    //add the game to the JFrame
-    FRAME.add(game);
-
-    //show the window
-    FRAME.setVisible(true);
-
-    //make a new Timer
-    Timer timer = new Timer(33, e -> {
-        game.gameLogic();
-        game.repaint();
+        // 60 FPS Game Loop (~16.6ms per tick)
+        Timer timer = new Timer(16, _ -> {
+            game.gameLogic();
+            game.repaint();
+        });
+        timer.start();
     });
-
-    //start the timer after it's been created
-    timer.start();
 }

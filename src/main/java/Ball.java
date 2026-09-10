@@ -2,56 +2,139 @@ import java.awt.*;
 
 public class Ball {
 
-    private int x, y, cx, cy, speed, size;
+    public static final double INITIAL_SPEED = 5.5;
+    public static final double MAX_SPEED = 12.0;
+
+    private double x, y;
+    private double vx, vy;
+    private double speed;
+    private int size;
     private final Color color;
 
-    public Ball(int x, int y, int cx, int cy, int speed, Color color, int size) {
+    public Ball(int x, int y, double vx, double vy, double speed, Color color, int size) {
         this.x = x;
         this.y = y;
-        this.cx = cx;
-        this.cy = cy;
+        this.vx = vx;
+        this.vy = vy;
         this.speed = speed;
         this.color = color;
         this.size = size;
     }
 
-    public void paint(Graphics g){
-        //set the brush color to the ball color
-        g.setColor(color);
-        //paint the ball at x, y with a width and height of the ball size
-        g.fillOval(x, y, size, size);
+    public void paint(Graphics g) {
+        Graphics2D g2d = (Graphics2D) g;
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        // Outer glow
+        g2d.setColor(new Color(255, 255, 0, 80));
+        g2d.fillOval((int) Math.round(x) - 2, (int) Math.round(y) - 2, size + 4, size + 4);
+
+        // Main ball
+        g2d.setColor(color);
+        g2d.fillOval((int) Math.round(x), (int) Math.round(y), size, size);
     }
 
-    public void move(){
-        x += cx;
-        y += cy;
+    public void move() {
+        x += vx;
+        y += vy;
     }
 
-    public void bounceOffEdges(int top, int bottom){
-        //if the y value is at the bottom of the screen
-        if (y > bottom - size){
-            reverseY();
+    public boolean bounceOffTopBottom(int top, int bottom) {
+        if (y <= top) {
+            y = top;
+            vy = Math.abs(vy);
+            SoundEffect.playWallBounce();
+            return true;
+        } else if (y + size >= bottom) {
+            y = bottom - size;
+            vy = -Math.abs(vy);
+            SoundEffect.playWallBounce();
+            return true;
         }
-        //if y value is at top of screen
-        else if(y < top){
-            reverseY();
-        }
-
-        //if x value is at left or right side
-        //hard-coded values, we will delete this section later
-        if(x < 0){
-            reverseX();
-        }
-        else if(x > 640 - size){
-            reverseX();
-        }
+        return false;
     }
 
-    private void reverseX(){
-        cx *= -1;
+    public void bouncePaddle(Paddle paddle, boolean isUserPaddle) {
+        // Increase speed gradually on each successful paddle return
+        speed = Math.min(speed * 1.05 + 0.1, MAX_SPEED);
+
+        // Reposition ball outside paddle to prevent sticking/multi-triggering
+        if (isUserPaddle) {
+            x = paddle.getX() + Paddle.PADDLE_WIDTH;
+        } else {
+            x = paddle.getX() - size;
+        }
+
+        // Calculate bounce angle based on where ball struck the paddle (-1.0 top to +1.0 bottom)
+        double ballCenterY = y + (size / 2.0);
+        double paddleCenterY = paddle.getY() + (paddle.getHeight() / 2.0);
+        double normalizedIntersect = (ballCenterY - paddleCenterY) / (paddle.getHeight() / 2.0);
+        normalizedIntersect = Math.max(-1.0, Math.min(1.0, normalizedIntersect));
+
+        // Max deflection angle: 60 degrees (PI / 3 radians)
+        double bounceAngle = normalizedIntersect * (Math.PI / 3.0);
+
+        if (isUserPaddle) {
+            vx = speed * Math.cos(bounceAngle);
+        } else {
+            vx = -speed * Math.cos(bounceAngle);
+        }
+        vy = speed * Math.sin(bounceAngle);
+
+        SoundEffect.playPaddleHit();
     }
 
-    private void reverseY(){
-        cy *= -1;
+    public void reset(int screenWidth, int screenHeight, int directionTo) {
+        this.size = 12;
+        this.x = (screenWidth - size) / 2.0;
+        this.y = (screenHeight - size) / 2.0;
+        this.speed = INITIAL_SPEED;
+
+        // Launch at an angle between -30 and +30 degrees
+        double angle = (Math.random() * (Math.PI / 3.0)) - (Math.PI / 6.0);
+        this.vx = directionTo * speed * Math.cos(angle);
+        this.vy = speed * Math.sin(angle);
+    }
+
+    public int getX() {
+        return (int) Math.round(x);
+    }
+
+    public int getY() {
+        return (int) Math.round(y);
+    }
+
+    public double getExactX() {
+        return x;
+    }
+
+    public double getExactY() {
+        return y;
+    }
+
+    public double getVx() {
+        return vx;
+    }
+
+    public double getVy() {
+        return vy;
+    }
+
+    public int getSize() {
+        return size;
+    }
+
+    public double getSpeed() {
+        return speed;
+    }
+
+    public void setPosition(double newX, double newY) {
+        this.x = newX;
+        this.y = newY;
+    }
+
+    public void setVelocity(double newVx, double newVy) {
+        this.vx = newVx;
+        this.vy = newVy;
     }
 }

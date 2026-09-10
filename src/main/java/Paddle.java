@@ -1,15 +1,16 @@
-import java.awt.*; //needed for Color
+import java.awt.*;
 
 public class Paddle {
 
-    static final int PADDLE_WIDTH = 15;
+    public static final int PADDLE_WIDTH = 14;
 
-    //declare instance variables
-    private int height, x, y, speed;
+    private int height;
+    private int x, y;
+    private int speed;
     private Color color;
 
     /**
-     * A paddle is a rectangle/block that can move up and down
+     * A paddle is a rectangle that can move up and down
      *
      * @param x      the x position to start drawing the paddle
      * @param y      the y position to start drawing the paddle
@@ -26,36 +27,73 @@ public class Paddle {
     }
 
     /**
-     * Paints a rectangle on the screen
+     * Paints the paddle with rounded corners and highlight
      *
      * @param g graphics object passed from calling method
      */
     public void paint(Graphics g) {
+        Graphics2D g2d = (Graphics2D) g;
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        //paint the rectangle for the paddle
-        g.setColor(color);
-        g.fillRect(x, y, PADDLE_WIDTH, height);
+        // Paddle body
+        g2d.setColor(color);
+        g2d.fillRoundRect(x, y, PADDLE_WIDTH, height, 6, 6);
 
+        // Inner highlight border
+        g2d.setColor(new Color(255, 255, 255, 120));
+        g2d.drawRoundRect(x, y, PADDLE_WIDTH, height, 6, 6);
     }
 
-    public void moveTowards(int moveToY) {
-
-        //find the location of the center of the paddle
+    public void moveTowards(int moveToY, int topLimit, int bottomLimit) {
         int centerY = y + height / 2;
+        int diff = moveToY - centerY;
 
-        //determine if we need to move more than the speed away from where we are now
-        if (Math.abs(centerY - moveToY) > speed) {
-            //if the center of the paddle is too far down
-            if (centerY > moveToY) {
-                //move the paddle up by the speed
-                y -= speed;
-            }
-            //if the center of the paddle is too far up
-            if (centerY < moveToY) {
-                //move the paddle down by speed
-                y += speed;
-            }
+        if (Math.abs(diff) > speed) {
+            y += (diff > 0 ? speed : -speed);
+        } else {
+            y += diff;
         }
 
+        // Clamp to boundaries
+        y = Math.clamp(y, topLimit, bottomLimit - height);
+    }
+
+    public void moveUp(int topLimit) {
+        y = Math.max(topLimit, y - speed);
+    }
+
+    public void moveDown(int bottomLimit) {
+        y = Math.min(bottomLimit - height, y + speed);
+    }
+
+    public boolean isCollidingWithBall(Ball ball) {
+        int ballX = ball.getX();
+        int ballY = ball.getY();
+        int ballSize = ball.getSize();
+
+        return ballX < x + PADDLE_WIDTH &&
+               ballX + ballSize > x &&
+               ballY < y + height &&
+               ballY + ballSize > y;
+    }
+
+    public int getX() {
+        return x;
+    }
+
+    public int getY() {
+        return y;
+    }
+
+    public int getHeight() {
+        return height;
+    }
+
+    public int getSpeed() {
+        return speed;
+    }
+
+    public void setY(int y) {
+        this.y = y;
     }
 }
