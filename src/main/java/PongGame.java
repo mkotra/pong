@@ -1,7 +1,11 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class PongGame extends JPanel implements KeyListener {
@@ -22,12 +26,16 @@ public class PongGame extends JPanel implements KeyListener {
     private final Paddle userPaddle;
     private final Paddle pcPaddle;
     private final Set<Integer> keysPressed = new HashSet<>();
+    private final Deque<Point> ballTrail = new ArrayDeque<>();
+    private final List<Particle> particles = new ArrayList<>();
 
     private int playerScore = 0;
     private int computerScore = 0;
     private String winnerText = "";
     private int rallyCount = 0;
     private int maxRally = 0;
+    private int shakeFrames = 0;
+    private int shakeIntensity = 0;
 
     public PongGame() {
         setPreferredSize(new Dimension(WINDOW_WIDTH, WINDOW_HEIGHT));
@@ -52,6 +60,12 @@ public class PongGame extends JPanel implements KeyListener {
         g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+        if (shakeFrames > 0) {
+            int offsetX = (int) Math.round((Math.random() * 2 - 1) * shakeIntensity);
+            int offsetY = (int) Math.round((Math.random() * 2 - 1) * shakeIntensity);
+            g2d.translate(offsetX, offsetY);
+        }
+
         // Court background
         g2d.setColor(new Color(15, 15, 20));
         g2d.fillRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -69,9 +83,11 @@ public class PongGame extends JPanel implements KeyListener {
         g2d.drawLine(WINDOW_WIDTH / 2, 0, WINDOW_WIDTH / 2, WINDOW_HEIGHT);
 
         // Render entities
+        paintBallTrail(g2d);
         ball.paint(g);
         userPaddle.paint(g);
         pcPaddle.paint(g);
+        paintParticles(g2d);
 
         // Scoreboard
         drawScoreboard(g2d);
@@ -173,15 +189,23 @@ public class PongGame extends JPanel implements KeyListener {
 
         // Update ball position
         ball.move();
+        recordBallTrail();
+
+        updateEffects();
 
         // Check top and bottom wall collisions
-        ball.bounceOffTopBottom(0, WINDOW_HEIGHT);
+        if (ball.bounceOffTopBottom(0, WINDOW_HEIGHT)) {
+            spawnParticles(ball.getX() + ball.getSize() / 2, ball.getY() + ball.getSize() / 2, new Color(160, 180, 255), 6);
+            triggerShake(1, 3);
+        }
 
         // Check scoring conditions
         if (ball.getX() + ball.getSize() < 0) {
             // PC scores
             computerScore++;
             SoundEffect.playScore();
+            spawnParticles(0, ball.getY() + ball.getSize() / 2, new Color(255, 100, 100), 18);
+            triggerShake(4, 8);
             if (computerScore >= WINNING_SCORE) {
                 gameState = State.GAME_OVER;
                 winnerText = "COMPUTER";
@@ -194,6 +218,8 @@ public class PongGame extends JPanel implements KeyListener {
             // Player scores
             playerScore++;
             SoundEffect.playScore();
+            spawnParticles(WINDOW_WIDTH, ball.getY() + ball.getSize() / 2, new Color(100, 180, 255), 18);
+            triggerShake(4, 8);
             if (playerScore >= WINNING_SCORE) {
                 gameState = State.GAME_OVER;
                 winnerText = "PLAYER";
@@ -219,6 +245,8 @@ public class PongGame extends JPanel implements KeyListener {
         // User paddle collision (Left side)
         if (ball.getVx() < 0 && userPaddle.isCollidingWithBall(ball)) {
             ball.bouncePaddle(userPaddle, true);
+            spawnParticles(ball.getX(), ball.getY() + ball.getSize() / 2, new Color(100, 190, 255), 10);
+            triggerShake(2, 4);
             rallyCount++;
             if (rallyCount > maxRally) {
                 maxRally = rallyCount;
@@ -228,6 +256,8 @@ public class PongGame extends JPanel implements KeyListener {
         // PC paddle collision (Right side)
         if (ball.getVx() > 0 && pcPaddle.isCollidingWithBall(ball)) {
             ball.bouncePaddle(pcPaddle, false);
+            spawnParticles(ball.getX() + ball.getSize(), ball.getY() + ball.getSize() / 2, new Color(255, 115, 115), 10);
+            triggerShake(2, 4);
             rallyCount++;
             if (rallyCount > maxRally) {
                 maxRally = rallyCount;
@@ -251,6 +281,80 @@ public class PongGame extends JPanel implements KeyListener {
     private void resetBall(int serveDirection) {
         rallyCount = 0;
         ball.reset(WINDOW_WIDTH, WINDOW_HEIGHT, serveDirection);
+        ballTrail.clear();
+    }
+
+    private void recordBallTrail() {
+        ballTrail.addFirst(new Point(ball.getX(), ball.getY()));
+        while (ballTrail.size() > 7) {
+            ballTrail.removeLast();
+        }
+    }
+
+    private void paintBallTrail(Graphics2D g2d) {
+        int index = 0;
+        for (Point position : ballTrail) {
+            int alpha = 70 - index * 9;
+            int size = Math.max(3, ball.getSize() - index);
+            g2d.setColor(new Color(255, 235, 90, Math.max(0, alpha)));
+            g2d.fillOval(position.x + (ball.getSize() - size) / 2, position.y + (ball.getSize() - size) / 2, size, size);
+            index++;
+        }
+    }
+
+    private void spawnParticles(int x, int y, Color color, int count) {
+        for (int i = 0; i < count; i++) {
+            double angle = Math.random() * Math.PI * 2;
+            double speed = 0.8 + Math.random() * 2.4;
+            particles.add(new Particle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, color));
+        }
+    }
+
+    private void updateEffects() {
+        particles.removeIf(particle -> !particle.update());
+        if (shakeFrames > 0) {
+            shakeFrames--;
+        }
+    }
+
+    private void paintParticles(Graphics2D g2d) {
+        for (Particle particle : particles) {
+            particle.paint(g2d);
+        }
+    }
+
+    private void triggerShake(int intensity, int frames) {
+        shakeIntensity = Math.max(shakeIntensity, intensity);
+        shakeFrames = Math.max(shakeFrames, frames);
+    }
+
+    private static class Particle {
+        private double x;
+        private double y;
+        private final double vx;
+        private final double vy;
+        private final Color color;
+        private int life = 18;
+
+        private Particle(double x, double y, double vx, double vy, Color color) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.color = color;
+        }
+
+        private boolean update() {
+            x += vx;
+            y += vy;
+            return --life > 0;
+        }
+
+        private void paint(Graphics2D g2d) {
+            int alpha = life * 12;
+            g2d.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
+            g2d.fillRect((int) Math.round(x), (int) Math.round(y), 3, 3);
+        }
     }
 
     public void restartFullGame() {
