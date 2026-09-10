@@ -7,6 +7,7 @@ public class Paddle {
     private int height;
     private int x, y;
     private int speed;
+    private int verticalVelocity;
     private Color color;
 
     /**
@@ -45,6 +46,7 @@ public class Paddle {
     }
 
     public void moveTowards(int moveToY, int topLimit, int bottomLimit) {
+        int previousY = y;
         int centerY = y + height / 2;
         int diff = moveToY - centerY;
 
@@ -56,14 +58,19 @@ public class Paddle {
 
         // Clamp to boundaries
         y = Math.clamp(y, topLimit, bottomLimit - height);
+        verticalVelocity = y - previousY;
     }
 
     public void moveUp(int topLimit) {
+        int previousY = y;
         y = Math.max(topLimit, y - speed);
+        verticalVelocity = y - previousY;
     }
 
     public void moveDown(int bottomLimit) {
+        int previousY = y;
         y = Math.min(bottomLimit - height, y + speed);
+        verticalVelocity = y - previousY;
     }
 
     public boolean isCollidingWithBall(Ball ball) {
@@ -93,7 +100,16 @@ public class Paddle {
         return speed;
     }
 
+    public int getVerticalVelocity() {
+        return verticalVelocity;
+    }
+
+    public void stopVerticalMovement() {
+        verticalVelocity = 0;
+    }
+
     public void setY(int y) {
         this.y = y;
+        verticalVelocity = 0;
     }
 }
