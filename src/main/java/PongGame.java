@@ -210,7 +210,6 @@ public class PongGame extends JPanel implements KeyListener {
             playerScore++;
             SoundEffect.playScore();
             spawnParticles(WINDOW_WIDTH, ball.getY() + ball.getSize() / 2, new Color(100, 180, 255), 18);
-            triggerShake(4, 8);
             if (playerScore >= WINNING_SCORE) {
                 gameState = State.GAME_OVER;
                 winnerText = "PLAYER";
@@ -247,7 +246,6 @@ public class PongGame extends JPanel implements KeyListener {
         if (ball.getVx() > 0 && pcPaddle.isCollidingWithBall(ball)) {
             ball.bouncePaddle(pcPaddle, false);
             spawnParticles(ball.getX() + ball.getSize(), ball.getY() + ball.getSize() / 2, new Color(255, 115, 115), 10);
-            triggerShake(2, 4);
             rallyCount++;
             if (rallyCount > maxRally) {
                 maxRally = rallyCount;
