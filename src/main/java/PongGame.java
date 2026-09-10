@@ -1,13 +1,18 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class PongGame extends JPanel implements KeyListener {
 
     public enum State {
         START,
+        SERVING,
         PLAYING,
         PAUSED,
         GAME_OVER
@@ -16,18 +21,23 @@ public class PongGame extends JPanel implements KeyListener {
     public static final int WINDOW_WIDTH = 640;
     public static final int WINDOW_HEIGHT = 480;
     public static final int WINNING_SCORE = 10;
+    private static final int SERVE_COUNTDOWN_TICKS = 60;
+    private static final int TICKS_PER_COUNTDOWN_NUMBER = SERVE_COUNTDOWN_TICKS / 3;
 
     private State gameState = State.START;
     private final Ball ball;
     private final Paddle userPaddle;
     private final Paddle pcPaddle;
     private final Set<Integer> keysPressed = new HashSet<>();
+    private final Deque<Point> ballTrail = new ArrayDeque<>();
+    private final List<Particle> particles = new ArrayList<>();
 
     private int playerScore = 0;
     private int computerScore = 0;
     private String winnerText = "";
     private int rallyCount = 0;
     private int maxRally = 0;
+    private int serveCountdownTicks = 0;
 
     public PongGame() {
         setPreferredSize(new Dimension(WINDOW_WIDTH, WINDOW_HEIGHT));
@@ -52,6 +62,7 @@ public class PongGame extends JPanel implements KeyListener {
         g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+
         // Court background
         g2d.setColor(new Color(15, 15, 20));
         g2d.fillRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -69,9 +80,11 @@ public class PongGame extends JPanel implements KeyListener {
         g2d.drawLine(WINDOW_WIDTH / 2, 0, WINDOW_WIDTH / 2, WINDOW_HEIGHT);
 
         // Render entities
+        paintBallTrail(g2d);
         ball.paint(g);
         userPaddle.paint(g);
         pcPaddle.paint(g);
+        paintParticles(g2d);
 
         // Scoreboard
         drawScoreboard(g2d);
@@ -79,6 +92,8 @@ public class PongGame extends JPanel implements KeyListener {
         // Overlays depending on state
         if (gameState == State.START) {
             drawStartOverlay(g2d);
+        } else if (gameState == State.SERVING) {
+            drawServeOverlay(g2d);
         } else if (gameState == State.PAUSED) {
             drawPausedOverlay(g2d);
         } else if (gameState == State.GAME_OVER) {
@@ -127,6 +142,16 @@ public class PongGame extends JPanel implements KeyListener {
         drawCenteredString(g2d, "Press SPACE or ENTER to Serve", WINDOW_HEIGHT / 2 + 80);
     }
 
+    private void drawServeOverlay(Graphics2D g2d) {
+        g2d.setColor(new Color(0, 0, 0, 100));
+        g2d.fillRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+        g2d.setColor(Color.YELLOW);
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 48));
+        int countdownNumber = (int) Math.ceil((double) serveCountdownTicks / TICKS_PER_COUNTDOWN_NUMBER);
+        drawCenteredString(g2d, Integer.toString(Math.max(1, countdownNumber)), WINDOW_HEIGHT / 2 + 15);
+    }
+
     private void drawPausedOverlay(Graphics2D g2d) {
         g2d.setColor(new Color(0, 0, 0, 160));
         g2d.fillRect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -167,39 +192,54 @@ public class PongGame extends JPanel implements KeyListener {
     }
 
     public void gameLogic() {
+        if (gameState == State.SERVING) {
+            updateEffects();
+            if (--serveCountdownTicks <= 0) {
+                gameState = State.PLAYING;
+            }
+            return;
+        }
+
         if (gameState != State.PLAYING) {
             return;
         }
 
         // Update ball position
         ball.move();
+        recordBallTrail();
+
+        updateEffects();
 
         // Check top and bottom wall collisions
-        ball.bounceOffTopBottom(0, WINDOW_HEIGHT);
+        if (ball.bounceOffTopBottom(0, WINDOW_HEIGHT)) {
+            spawnParticles(ball.getX() + ball.getSize() / 2, ball.getY() + ball.getSize() / 2, new Color(160, 180, 255), 6);
+        }
 
         // Check scoring conditions
         if (ball.getX() + ball.getSize() < 0) {
             // PC scores
             computerScore++;
             SoundEffect.playScore();
+            spawnParticles(0, ball.getY() + ball.getSize() / 2, new Color(255, 100, 100), 18);
             if (computerScore >= WINNING_SCORE) {
                 gameState = State.GAME_OVER;
                 winnerText = "COMPUTER";
                 SoundEffect.playGameOver();
             } else {
-                resetBall(1); // Serve towards PC
+                startServe(1); // Serve towards PC
             }
             return;
         } else if (ball.getX() > WINDOW_WIDTH) {
             // Player scores
             playerScore++;
             SoundEffect.playScore();
+            spawnParticles(WINDOW_WIDTH, ball.getY() + ball.getSize() / 2, new Color(100, 180, 255), 18);
             if (playerScore >= WINNING_SCORE) {
                 gameState = State.GAME_OVER;
                 winnerText = "PLAYER";
                 SoundEffect.playVictory();
             } else {
-                resetBall(-1); // Serve towards Player
+                startServe(-1); // Serve towards Player
             }
             return;
         }
@@ -219,6 +259,7 @@ public class PongGame extends JPanel implements KeyListener {
         // User paddle collision (Left side)
         if (ball.getVx() < 0 && userPaddle.isCollidingWithBall(ball)) {
             ball.bouncePaddle(userPaddle, true);
+            spawnParticles(ball.getX(), ball.getY() + ball.getSize() / 2, new Color(100, 190, 255), 10);
             rallyCount++;
             if (rallyCount > maxRally) {
                 maxRally = rallyCount;
@@ -228,6 +269,7 @@ public class PongGame extends JPanel implements KeyListener {
         // PC paddle collision (Right side)
         if (ball.getVx() > 0 && pcPaddle.isCollidingWithBall(ball)) {
             ball.bouncePaddle(pcPaddle, false);
+            spawnParticles(ball.getX() + ball.getSize(), ball.getY() + ball.getSize() / 2, new Color(255, 115, 115), 10);
             rallyCount++;
             if (rallyCount > maxRally) {
                 maxRally = rallyCount;
@@ -248,9 +290,78 @@ public class PongGame extends JPanel implements KeyListener {
         pcPaddle.moveTowards(targetY, 0, WINDOW_HEIGHT);
     }
 
-    private void resetBall(int serveDirection) {
+    private void startServe(int serveDirection) {
         rallyCount = 0;
         ball.reset(WINDOW_WIDTH, WINDOW_HEIGHT, serveDirection);
+        ballTrail.clear();
+        serveCountdownTicks = SERVE_COUNTDOWN_TICKS;
+        gameState = State.SERVING;
+    }
+
+    private void recordBallTrail() {
+        ballTrail.addFirst(new Point(ball.getX(), ball.getY()));
+        while (ballTrail.size() > 7) {
+            ballTrail.removeLast();
+        }
+    }
+
+    private void paintBallTrail(Graphics2D g2d) {
+        int index = 0;
+        for (Point position : ballTrail) {
+            int alpha = 70 - index * 9;
+            int size = Math.max(3, ball.getSize() - index);
+            g2d.setColor(new Color(255, 235, 90, Math.max(0, alpha)));
+            g2d.fillOval(position.x + (ball.getSize() - size) / 2, position.y + (ball.getSize() - size) / 2, size, size);
+            index++;
+        }
+    }
+
+    private void spawnParticles(int x, int y, Color color, int count) {
+        for (int i = 0; i < count; i++) {
+            double angle = Math.random() * Math.PI * 2;
+            double speed = 0.8 + Math.random() * 2.4;
+            particles.add(new Particle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, color));
+        }
+    }
+
+    private void updateEffects() {
+        particles.removeIf(particle -> !particle.update());
+    }
+
+    private void paintParticles(Graphics2D g2d) {
+        for (Particle particle : particles) {
+            particle.paint(g2d);
+        }
+    }
+
+
+    private static class Particle {
+        private double x;
+        private double y;
+        private final double vx;
+        private final double vy;
+        private final Color color;
+        private int life = 18;
+
+        private Particle(double x, double y, double vx, double vy, Color color) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.color = color;
+        }
+
+        private boolean update() {
+            x += vx;
+            y += vy;
+            return --life > 0;
+        }
+
+        private void paint(Graphics2D g2d) {
+            int alpha = life * 12;
+            g2d.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha));
+            g2d.fillRect((int) Math.round(x), (int) Math.round(y), 3, 3);
+        }
     }
 
     public void restartFullGame() {
@@ -261,8 +372,7 @@ public class PongGame extends JPanel implements KeyListener {
         winnerText = "";
         userPaddle.setY((WINDOW_HEIGHT - userPaddle.getHeight()) / 2);
         pcPaddle.setY((WINDOW_HEIGHT - pcPaddle.getHeight()) / 2);
-        resetBall(Math.random() > 0.5 ? 1 : -1);
-        gameState = State.PLAYING;
+        startServe(1);
     }
 
     @Override

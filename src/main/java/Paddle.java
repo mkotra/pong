@@ -42,6 +42,7 @@ public class Paddle {
 
         // Inner highlight border
         g2d.setColor(new Color(255, 255, 255, 120));
+        g2d.setStroke(new BasicStroke(1f));
         g2d.drawRoundRect(x, y, PADDLE_WIDTH, height, 6, 6);
     }
 
